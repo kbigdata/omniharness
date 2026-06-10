@@ -1,5 +1,10 @@
 # omniharness — Claude Code 하네스 플러그인
 
+[![Release](https://img.shields.io/github/v/release/kbigdata/omniharness?sort=semver)](https://github.com/kbigdata/omniharness/releases/latest)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
+![No Python framework](https://img.shields.io/badge/python-framework--free-blue)
+
 > 어떤 프로젝트든 **강제(권한 훅) · 신선검증(서브에이전트) · 장기실행 인계 · 자기개선(스킬/위키)**을
 > 갖춘 하네스로 바꾸는 **Claude Code 플러그인**.
 > **Python 패키지·프레임워크 없음** — 하네스 부품을 *재구현*하지 않고 Claude Code 네이티브
