@@ -17,6 +17,8 @@ and automates what it does well**. A single `/omniharness:init` gives any projec
 | 📚 | **Wiki** | Accumulates verified learnings as docs to reuse in later work |
 | 🤖 | **Hermes — skill automation** | Auto-extracts successful work into reusable skills (activated only after human approval) |
 
+`init` installs the **skeleton** of all three — the harness (command blocking + working rules) works **immediately**, while the wiki and skills start empty and fill up as you work.
+
 > What you install is just a few Markdown, JSON, and shell files. (No Python package.)
 
 ---
