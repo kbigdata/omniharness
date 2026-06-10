@@ -1,0 +1,2 @@
+# 격리(quarantine) — Hermes 생성 스킬 후보. Claude Code는 이 디렉터리를 로드하지 않는다.
+# 사람이 `harness skills promote <name>` 하면 ../skills/ 로 이동해 활성화.

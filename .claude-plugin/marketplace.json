@@ -1,0 +1,13 @@
+{
+  "name": "omniharness-marketplace",
+  "owner": { "name": "omniharness contributors" },
+  "plugins": [
+    {
+      "name": "omniharness",
+      "source": ".",
+      "description": "프로젝트를 하네스로 — 강제·신선검증·인계·자기개선을 Claude Code에 더한다.",
+      "version": "0.3.0",
+      "author": { "name": "omniharness contributors" }
+    }
+  ]
+}

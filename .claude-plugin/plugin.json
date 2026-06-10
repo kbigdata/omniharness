@@ -1,0 +1,9 @@
+{
+  "name": "omniharness",
+  "displayName": "omniharness",
+  "version": "0.3.0",
+  "description": "프로젝트를 하네스로 — 강제(권한 훅)·신선검증(서브에이전트)·장기실행 인계·자기개선(스킬/위키)을 Claude Code에 네이티브로 더한다.",
+  "author": { "name": "omniharness contributors" },
+  "license": "MIT",
+  "keywords": ["harness", "permissions", "hooks", "skills", "wiki", "self-improving"]
+}
