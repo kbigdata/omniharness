@@ -53,6 +53,45 @@ out2="$(printf '{}' | CLAUDE_PROJECT_DIR="$t" python3 "$ROOT/scripts/stop_guard.
 [ -z "$out2" ] && ok "전부 통과 → 종료 허용" || bad "stop allow (out=$out2)"
 rm -rf "$t"
 
+echo "== verify_gate.py (완료 게이트) =="
+t3="$(mktemp -d)"
+printf '[{"description":"f1","passes":true}]' > "$t3/feature_list.json"
+out="$(printf '{}' | CLAUDE_PROJECT_DIR="$t3" python3 "$ROOT/scripts/verify_gate.py")"
+printf '%s' "$out" | grep -q '"decision"' && ok "미검증 완료 → 종료 차단" || bad "verify_gate block (out=$out)"
+CLAUDE_PROJECT_DIR="$t3" python3 "$ROOT/scripts/verify_gate.py" --record "f1" PASS "근거" >/dev/null
+out2="$(printf '{}' | CLAUDE_PROJECT_DIR="$t3" python3 "$ROOT/scripts/verify_gate.py")"
+[ -z "$out2" ] && ok "PASS 기록 후 → 종료 허용" || bad "verify_gate allow (out=$out2)"
+CLAUDE_PROJECT_DIR="$t3" python3 "$ROOT/scripts/verify_gate.py" --record "f1" FAIL "이유" >/dev/null
+out3="$(printf '{}' | CLAUDE_PROJECT_DIR="$t3" python3 "$ROOT/scripts/verify_gate.py")"
+printf '%s' "$out3" | grep -q '"decision"' && ok "FAIL 기록 → 여전히 차단" || bad "verify_gate fail (out=$out3)"
+rm -rf "$t3"
+
+echo "== skill_nudge.py (트리거형 캡처 유도) =="
+t4="$(mktemp -d)"
+printf '[{"description":"f1","passes":true}]' > "$t4/feature_list.json"
+# 검증 기록 없으면 유도 안 함
+out0="$(printf '{}' | CLAUDE_PROJECT_DIR="$t4" python3 "$ROOT/scripts/skill_nudge.py")"
+[ -z "$out0" ] && ok "미검증이면 유도 안 함" || bad "nudge premature (out=$out0)"
+CLAUDE_PROJECT_DIR="$t4" python3 "$ROOT/scripts/verify_gate.py" --record "f1" PASS "근거" >/dev/null
+out="$(printf '{}' | CLAUDE_PROJECT_DIR="$t4" python3 "$ROOT/scripts/skill_nudge.py")"
+printf '%s' "$out" | grep -q 'skillify' && ok "검증완료 → skillify 유도" || bad "nudge (out=$out)"
+out2="$(printf '{}' | CLAUDE_PROJECT_DIR="$t4" python3 "$ROOT/scripts/skill_nudge.py")"
+[ -z "$out2" ] && ok "중복 유도 안 함" || bad "nudge dedup (out=$out2)"
+rm -rf "$t4"
+
+echo "== session_context.py (인계 자동 주입) =="
+t5="$(mktemp -d)"
+printf '세션1: 기반 구축 완료\n' > "$t5/claude-progress.txt"
+printf '[{"description":"f1","passes":false}]' > "$t5/feature_list.json"
+out="$(printf '{}' | CLAUDE_PROJECT_DIR="$t5" python3 "$ROOT/scripts/session_context.py")"
+printf '%s' "$out" | python3 -c "import sys,json;d=json.load(sys.stdin);assert d['hookSpecificOutput']['hookEventName']=='SessionStart' and d['hookSpecificOutput']['additionalContext']" 2>/dev/null \
+  && ok "진행상황 additionalContext 주입" || bad "session_context (out=$out)"
+# 관련 파일 전무하면 무개입
+t5b="$(mktemp -d)"
+out2="$(printf '{}' | CLAUDE_PROJECT_DIR="$t5b" python3 "$ROOT/scripts/session_context.py")"
+[ -z "$out2" ] && ok "인계자료 없으면 무개입" || bad "session_context empty (out=$out2)"
+rm -rf "$t5" "$t5b"
+
 echo "== scaffold.sh (init) =="
 t2="$(mktemp -d)"
 CLAUDE_PLUGIN_ROOT="$ROOT" bash "$ROOT/scripts/scaffold.sh" "$t2" >/dev/null
