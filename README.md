@@ -8,72 +8,73 @@
 
 *[English README](README.en.md)*
 
-**omniharness**는 Claude Code를 **스스로 통제하고, 배운 것을 쌓고, 잘한 일을 자동화하는**
-작업 환경으로 바꾸는 플러그인입니다. `/omniharness:init` 한 번이면 어떤 프로젝트든 아래 세 축을 갖춥니다.
+**omniharness**는 Claude Code에 **강제 안전망 · 완료 검증 게이트 · 인계 자동 노출 · 스킬/위키 적재**를
+더하는 플러그인입니다. `/omniharness:init` 한 번으로 설치됩니다.
 
-| | 축 | 한 줄 설명 |
+이 README는 **무엇이 코드로 강제되고, 무엇이 모델에게 맡겨진 권고인지** 분명히 구분합니다 — 과장하지 않습니다.
+
+> 설치물은 마크다운·JSON·파이썬/셸 스크립트 몇 개뿐입니다. (Python 패키지·프레임워크 없음)
+
+---
+
+## 무엇이 강제이고 무엇이 권고인가 (먼저 읽으세요)
+
+| 기능 | 분류 | 실제로 무엇이 일어나나 |
 |---|---|---|
-| 🛡️ | **하네스 (Harness)** | 위험한 명령을 막고, 결과를 독립적으로 검증하고, 긴 작업을 끊겨도 이어감 |
-| 📚 | **위키 (Wiki)** | 검증된 학습을 문서로 쌓아 다음 작업에 재사용 |
-| 🤖 | **Hermes 스킬 자동화** | 성공한 작업을 재사용 스킬로 자동 추출 (사람 승인 후 활성) |
+| 위험 명령 차단 | 🔒 **강제(코드)** | PreToolUse 훅 `policy.py` + `.claude/settings.json` — `rm -rf`·`sudo`·비밀키 읽기 deny. **모델 협조와 무관** |
+| 완료 게이트(독립 검증) | 🔒 **강제(코드)** | Stop 훅 `verify_gate.py` — **PASS 검증기록이 없는 `passes:true`면 종료를 차단** |
+| 조기종료 차단 | 🔒 **강제(코드)** ¹ | Stop 훅 `stop_guard.py` — 미통과 기능이 남으면 종료 차단. ¹전제: `feature_list.json`을 채워야 함 |
+| 작업 기록 | 🔒 **강제(코드)** | PostToolUse 훅 `audit.py` → `.omniharness/audit.jsonl` |
+| 스킬 격리·승급 | 🔒 **강제(코드)** | `skill_gate.py`(위험어·중복 거부, 격리) + `promote.py`(**사람 승인** 후에만 활성) |
+| 위키 drift 점검 | 🔒 **강제(코드)** | `wiki_lint.py` — frontmatter·status·고아 페이지 점검(**점검만, 수정은 안 함**) |
+| 인계 컨텍스트 노출 | 🔁 **자동 주입** | SessionStart 훅 `session_context.py` — 진행·다음기능·위키·git log를 **세션 시작 시 주입** |
+| 스킬 캡처 유도 | 🔁 **자동 주입** | PostToolUse 훅 `skill_nudge.py` — **검증 통과한** 기능에 한해 `skillify`를 1회 제안 |
+| 독립 평가 실행 | 🧩 **서브에이전트** | `evaluator`(`isolation: worktree`) — 호출되면 생성 과정을 못 본 컨텍스트에서 PASS/FAIL |
+| 작업 규칙 로드 | 🔁 자동 / 준수는 권고 | `AGENTS.md`가 매 세션 자동 로드됨. **내용 준수는 모델 권고**(강제 아님) |
+| 스킬 *작성* · 위키 *작성* | ✍️ **모델 권고** | 추출·페이지 작성은 **모델이** 함. 플러그인은 트리거·게이트·점검만 |
 
-`init`은 세 축의 **골격**을 설치합니다 — 하네스(위험 명령 차단·작업 규칙)는 **즉시 작동**하고, 위키·스킬은 작업하며 채워 가는 빈 그릇으로 시작합니다.
-
-> 설치물은 마크다운·JSON·셸 스크립트 몇 개뿐입니다. (Python 패키지 없음)
+🔒 강제 = 모델이 거부해도 코드가 막거나 실행한다. 🔁 자동 주입 = 훅이 컨텍스트를 떠먹인다. ✍️ 권고 = 결국 모델이 해야 한다.
 
 ---
 
 ## 🛡️ 하네스 — 통제와 검증
 
-**하네스란?** LLM에게 일을 맡길 때 *규칙·차단·검증*을 거는 통제 장치입니다.
-모델은 똑똑하지만 가끔 위험한 명령을 실행하고, 자기 결과를 스스로 "잘했다"고 착각하며,
-긴 작업을 중간에 끝내버립니다. 하네스가 이를 **강제로** 잡아줍니다.
+> *훅(hook) = Claude Code가 도구를 쓰기 직전/직후·세션 시작·종료 시점에 자동 실행하는 스크립트.*
 
-> *훅(hook) = Claude Code가 도구를 쓰기 직전/직후, 또는 끝내려 할 때 자동 실행하는 스크립트.*
+- **위험 명령 차단** — 모델이 `rm -rf /`·`sudo`·비밀키(`.env`·`id_rsa`)를 실수로 실행하려 하면 도구 실행 **직전**에 거부. 권한 설정과 훅, 2겹.
+- **완료 게이트** — 모델은 자기 결과를 "됐다"고 착각하기 쉽습니다(자기평가 편향). 그래서 **검증 없이는 완료가 불가능**합니다: `/omniharness:verify`가 독립 `evaluator`로 PASS/FAIL을 받아 기록하고, 그 PASS 기록이 없으면 **종료가 막힙니다**.
+- **조기종료 차단** — `feature_list.json`에 미통과 기능이 남으면 종료를 막아 "하다 말기"를 방지(전제: 목록을 채워야 함).
+- **작업 기록** — 모든 도구 호출을 `audit.jsonl`에 남김.
 
-| 기능 | 왜 필요한가 | 어떻게 동작하나 |
-|---|---|---|
-| **위험 명령 차단** | 모델이 `rm -rf /`·`sudo`·비밀키(`.env`·`id_rsa`) 읽기를 실수로 실행할 수 있음 | 도구 실행 **직전** 훅이 검사해 거부 + 프로젝트 권한 설정, 2중 방어 |
-| **독립 검증** | 작업한 본인은 자기 결과를 객관적으로 못 봄(자기평가 편향) | 과정을 **못 본** 별도 에이전트가 결과만 보고 합격/불합격 판정 |
-| **긴 작업 이어가기** | 세션 종료·컨텍스트 한계로 긴 작업이 중간에 끊김 | 진행 상황·남은 할 일 파일로 재개. 할 일이 남으면 **종료도 막음** |
-| **작업 규칙** | "생각 먼저 · 단순하게 · 최소 변경 · 검증 먼저"를 매번 지시하기 번거로움 | `AGENTS.md`에 적어 **매 세션 자동 로드** |
-| **작업 기록** | 무엇을 했는지 추적·감사가 필요함 | 모든 도구 호출을 `.omniharness/audit.jsonl`에 기록 |
+## 📚 위키 — 배운 것을 쌓고 자동으로 꺼내 본다
 
-## 📚 위키 — 배운 것을 쌓는다
+- **수동 적재**: 검증된 선언적 학습을 `/omniharness:wiki-ingest`로 페이지에 기록(작성은 모델이 함).
+- **자동 노출**: 다음 세션이 시작될 때 `wiki/index.md`와 진행 상황이 **자동으로 컨텍스트에 주입**되어, 같은 코드를 다시 탐색하지 않습니다.
+- **강제 점검**: `/omniharness:wiki-lint`(=`wiki_lint.py`)가 오래되거나 깨진 페이지를 보고합니다(고치진 않음).
+- (Andrej Karpathy의 "에이전트가 스스로 관리하는 지식 위키" 개념에서.)
 
-**무엇인가?** 프로젝트에서 검증된 학습("이 모듈은 이렇게 동작한다", "이 함정을 조심하라")을
-구조화된 위키 문서로 축적합니다.
+## 🤖 Hermes — 트리거형 스킬 캡처 (자동 생성 아님)
 
-**왜 필요한가?** Claude는 세션이 끝나면 배운 것을 잊습니다. 위키가 없으면 다음 세션이 같은 코드를
-다시 탐색하고 같은 실수를 반복합니다. 위키에 쌓아두면 다음 작업이 바로 참조해 **더 빠르고 정확**해집니다.
-(Andrej Karpathy가 제안한 "에이전트가 스스로 관리하는 지식 위키" 개념에서 따왔습니다.)
+성공한 작업을 재사용 스킬로 **자동 생성하지 않습니다.** 대신 정직한 4단계입니다:
 
-```
-/omniharness:wiki-ingest        # 검증된 학습을 위키에 기록
-/omniharness:wiki-lint          # 위키 내용이 현재 코드와 어긋났는지 점검
-```
+1. **유도(자동 주입)** — 기능이 검증 통과로 완료되면 훅이 "재사용 절차면 `/omniharness:skillify` 하라"고 제안.
+2. **작성(모델)** — `/omniharness:skillify`로 모델이 스킬 후보를 씀.
+3. **게이트(강제)** — `skill_gate.py`가 위험어·중복을 거부하고 **격리**(`.claude/skills-proposed/`).
+4. **승인(사람)** — `/omniharness:promote <name>`로 사람이 검토 후에만 활성화.
 
-## 🤖 Hermes — 스킬 자동 생성
+## 한계 (비목표)
 
-**무엇인가?** 한 번 성공한 작업 절차를 재사용 가능한 "스킬"로 자동 추출합니다.
+정직하게 밝힙니다:
 
-**왜 필요한가?** 같은 종류의 작업을 매번 처음부터 다시 설명하고 수행하는 건 낭비입니다.
-성공 경험을 스킬로 저장하면 다음에는 **한 번의 호출로 재사용**할 수 있습니다.
-
-**안전장치** — 추출한 스킬을 *자동으로 켜지 않습니다.* 후보로 격리해 두고 **사람이 검토·승인**해야
-활성화됩니다. 검증되지 않은 스킬이 그대로 적용되는 것을 막기 위함입니다.
-
-```
-/omniharness:skillify           # 성공한 작업 → 재사용 스킬 후보로 저장
-/omniharness:promote <name>     # 검토 후 승인 → 활성화
-```
+- **무인 자율 루프가 아닙니다.** 스킬·위키를 사람 없이 자동 생성/갱신하지 않습니다. 그건 세션 *밖에서* 도는 외부 드라이버가 필요하며, 이 플러그인(세션 *안에서* 동작)의 범위 밖입니다.
+- **완료 게이트는 검증기록의 *존재*만 강제합니다.** evaluator를 건너뛰고 기록을 위조하는 우회까지 막지는 못합니다.
+- **규칙 *준수*는 강제가 아닙니다.** `AGENTS.md`는 자동 로드되지만 따르는 건 모델 몫입니다 — 코드로 막는 것은 위험 *행위*뿐입니다.
 
 ---
 
 ## 설치
 
 ```bash
-# 설치
 /plugin marketplace add https://github.com/kbigdata/omniharness
 /plugin install omniharness
 
@@ -83,38 +84,33 @@ claude --plugin-dir /path/to/omniharness
 
 ## 사용
 
-먼저 프로젝트에서 한 번 초기화합니다.
-
 ```
-/omniharness:init
+/omniharness:init               # 프로젝트에 초기 파일 생성(규칙·권한·진행·위키)
+/omniharness:verify <설명>      # 독립 evaluator로 검증 + PASS/FAIL 기록 (완료 전 필수)
+/omniharness:skillify           # 성공한 작업 → 재사용 스킬 후보로 저장
+/omniharness:promote <name>     # 사람 검토 후 스킬 활성화
+/omniharness:wiki-ingest        # 검증된 학습을 위키에 기록
+/omniharness:wiki-lint          # 위키 drift 점검
 ```
-
-현재 프로젝트에 **하네스·위키·스킬 초기 파일**(작업 규칙·권한 설정·진행 파일·위키 폴더)을 만듭니다.
-이후 작업부터 위험 명령 차단·독립 검증이 자동 적용됩니다. 나머지 명령:
-
-| 명령 | 하는 일 |
-|---|---|
-| `/omniharness:skillify` | 성공한 작업 → 재사용 스킬 후보로 저장 |
-| `/omniharness:promote <name>` | 검토 후 스킬 활성화 |
-| `/omniharness:wiki-ingest` | 검증된 학습을 위키에 기록 |
-| `/omniharness:wiki-lint` | 위키가 현재 코드와 어긋났는지 점검 |
 
 ## 동작 확인
 
-- **오프라인(API 키 불필요)**: `bash tests/run.sh`
-  — 훅 스크립트에 샘플 입력을 넣어 정상 동작을 확인합니다
-  (위험/비밀키 **차단**, 정상 명령 **허용**, 작업 기록, 스킬 저장·중복 제거·활성화, 종료 방지, 초기 파일 생성).
-- **실제 Claude Code**: `claude --plugin-dir .` 로 실행해 위험 명령이 **실제로 차단**되는지 확인.
+- **오프라인(API 키 불필요)**: `bash tests/run.sh` — 훅/게이트 스크립트에 샘플 입력을 넣어 24개 단언
+  (위험·비밀키 차단, 정상 허용, 완료 게이트 차단/허용, 인계 주입, 스킬 유도·격리·중복·승급, 종료 차단, 위키 lint).
+- **실제 Claude Code(실증됨)**: `claude --plugin-dir .` 로
+  ① SessionStart가 인계 컨텍스트를 **실제 주입**, ② 미검증 완료를 Stop 게이트가 **실제 차단**, ③ 위험 명령 PreToolUse **실제 차단** 을 관찰했습니다.
 
 ## 폴더 구조
 
 ```
 .claude-plugin/{plugin.json, marketplace.json}   # 플러그인 정보
-hooks/hooks.json                                 # 어떤 훅을 언제 실행할지
-scripts/*.py, scaffold.sh                         # 훅·검사·초기화 스크립트
-agents/evaluator.md                               # 독립 검증 에이전트
-skills/{init,skillify,wiki-ingest,promote,wiki-lint}/SKILL.md
+hooks/hooks.json                                 # SessionStart·PreToolUse·PostToolUse·Stop 등록
+scripts/                                          # 훅·게이트·유틸 (낱개 스크립트)
+  policy.py audit.py stop_guard.py verify_gate.py session_context.py skill_nudge.py
+  skill_gate.py promote.py wiki_lint.py next_feature.py scaffold.sh
+agents/evaluator.md                               # 독립 평가 서브에이전트
+skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # init이 프로젝트로 복사하는 초기 파일들
 docs/                                             # 설계 근거 문서
-tests/run.sh                                      # 오프라인 동작 확인
+tests/run.sh                                      # 오프라인 동작 확인(24 단언)
 ```
