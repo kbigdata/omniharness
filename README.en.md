@@ -16,8 +16,7 @@ Once installed, in any project Claude will:
 - 🔄 **Resume long tasks after an interruption** — picks up from saved progress and the remaining to-do list
 - 📚 **Turn repeated work into reusable skills, and accumulate what it learns into a wiki**
 
-> **No Python package at all.** It only composes features Claude Code already has
-> (hooks · skills · subagents · settings). What you install is a few Markdown, JSON, and shell files.
+> What you install is just a few Markdown, JSON, and shell files. (No Python package.)
 
 ---
 
@@ -35,12 +34,6 @@ Once installed, in any project Claude will:
 | **Skill automation** | Save a successful approach as a reusable skill (**a human must approve** to activate) | `/omniharness:skillify` → check → `/omniharness:promote` |
 | **Knowledge wiki** | Accumulate verified learnings as wiki docs | `/omniharness:wiki-ingest` |
 | **Working rules** | Auto-load good principles (think first · keep it simple · minimal changes · verify first) each session | `AGENTS.md` created by `init` |
-
-## Why there's no Python package
-
-Rebuilding these features in Python would **re-implement what Claude Code already provides**.
-Instead, omniharness **only composes Claude Code's built-in features** (hooks · skills · subagents · permission settings).
-That keeps it lighter and less likely to break when Claude Code updates.
 
 ## Install / local test
 
@@ -83,8 +76,3 @@ templates/                                        # starter files init copies in
 docs/                                             # design rationale
 tests/run.sh                                      # offline check
 ```
-
-Each script documents **"why this rule exists (which model weakness it covers)"** in its comments,
-so you know what to re-check when a rule goes stale → [`docs/하네스-가정.md`](docs/하네스-가정.md).
-
-Full design rationale: [`docs/하네스-엔지니어링-갭분석.md`](docs/하네스-엔지니어링-갭분석.md).
