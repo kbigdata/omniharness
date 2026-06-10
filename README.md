@@ -1,4 +1,4 @@
-# omniharness — Claude Code 하네스 플러그인
+# omniharness — Claude Code 안전장치 플러그인
 
 [![CI](https://github.com/kbigdata/omniharness/actions/workflows/ci.yml/badge.svg)](https://github.com/kbigdata/omniharness/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/kbigdata/omniharness?sort=semver)](https://github.com/kbigdata/omniharness/releases/latest)
@@ -6,66 +6,83 @@
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![No Python framework](https://img.shields.io/badge/python-framework--free-blue)
 
-> 어떤 프로젝트든 **강제(권한 훅) · 신선검증(서브에이전트) · 장기실행 인계 · 자기개선(스킬/위키)**을
-> 갖춘 하네스로 바꾸는 **Claude Code 플러그인**.
-> **Python 패키지·프레임워크 없음** — 하네스 부품을 *재구현*하지 않고 Claude Code 네이티브
-> (hooks · skills · subagents · settings)로 *구성*한다. (셸/훅 스크립트 몇 개뿐.)
+**omniharness**는 Claude Code에 **안전장치와 자동 점검**을 입히는 플러그인입니다.
+설치하면 어떤 프로젝트에서든 Claude가:
 
-설계 기준은 [`docs/하네스-엔지니어링-갭분석.md`](docs/하네스-엔지니어링-갭분석.md)(Anthropic 하네스 프레임워크 종합).
+- 💥 **위험한 명령을 자동으로 막습니다** — 예: `rm -rf /`, `sudo`, 비밀키(`.env`·`id_rsa`) 읽기
+- 🔍 **자기 작업을 다른 에이전트가 따로 검사합니다** — 작업한 본인이 아니라, 과정을 못 본 별도 에이전트가 결과를 점검
+- 🔄 **긴 작업이 중간에 끊겨도 이어서 합니다** — 진행 상황과 남은 할 일을 보고 재개
+- 📚 **반복 작업은 재사용 스킬로, 배운 것은 위키로 쌓습니다**
 
-## 왜 플러그인인가
-이전 Python 라이브러리(superharness/omni-harness)는 자기개선 코드가 superharness와 구조가 닮았다.
-플러그인으로 가면 **Python backend/loop 자체가 사라져** 그 닮음이 없어지고, 강제·도구·스킬·루프를
-**Claude Code가 네이티브로** 한다.
+> **Python 패키지가 전혀 없습니다.** Claude Code에 이미 있는 기능(hooks·skills·subagents·settings)을
+> 조합만 했습니다. 설치물은 마크다운·JSON·셸 스크립트 몇 개가 전부입니다.
 
-## 하네스 부품 → Claude Code 메커니즘
+---
 
-| 부품 (GAP) | 메커니즘 |
-|---|---|
-| **강제 계층**(§6/§7) | `hooks/` PreToolUse → `scripts/policy.py`(파괴/시크릿 deny) **+** init이 프로젝트 `.claude/settings.json`에 deny/ask (2겹) |
-| **관측**(§3) | PostToolUse → `scripts/audit.py` (`.omniharness/audit.jsonl`) |
-| **지속/조기완료 방지**(§4) | Stop 훅 → `scripts/stop_guard.py` (feature_list 미완료면 종료 차단) |
-| **신선검증**(§10) | `agents/evaluator.md` 서브에이전트 (`isolation: worktree` = 생성 못 본 별도 컨텍스트) |
-| **실행 루프**(§4) | Claude Code 네이티브 루프 + `AGENTS.md` 세션 의례 |
-| **장기실행 인계**(§9) | `templates/`(feature_list.json·init.sh·claude-progress.txt) + `/omniharness:init` |
-| **자기개선 Hermes** | `skills/skillify` → `scripts/skill_gate.py`(격리) → `/omniharness:promote` |
-| **카파시 위키** | `skills/wiki-ingest` + `templates/wiki/` + `/omniharness:wiki-lint` |
-| **헌법** | init이 `AGENTS.md`(카파시 4원칙+verify-first) 스캐폴드 (네이티브 로드) |
+## 무엇을 해주나
+
+> *훅(hook) = Claude Code가 도구를 쓰기 **직전/직후**, 또는 **끝내려 할 때** 자동 실행하는 사용자 스크립트.*
+
+| 기능 | 하는 일 | 구현 방식 |
+|---|---|---|
+| **위험 명령 차단** | `rm -rf /`·`sudo`·비밀키 읽기 등을 실행 **전에** 자동 거부 | 도구 사용 직전 훅 + 프로젝트 권한 설정(`.claude/settings.json`), 2중 방어 |
+| **작업 기록** | Claude가 쓴 모든 도구 호출을 로그 파일에 남김 | 도구 사용 직후 훅 → `.omniharness/audit.jsonl` |
+| **중간 종료 방지** | 할 일이 남았는데 끝내려 하면 종료를 막음 | 종료 시점 훅 → 남은 할 일 목록(`feature_list.json`) 확인 |
+| **독립 검증** | 작업 과정을 **못 본** 별도 에이전트가 결과만 보고 합격/불합격 판정 | 서브에이전트(`agents/evaluator.md`) — 별도 작업폴더에서 읽기 전용 실행 |
+| **긴 작업 이어가기** | 세션이 끊겨도 진행 파일을 보고 다시 이어감 | `feature_list.json`·`claude-progress.txt` |
+| **스킬 자동화** | 성공한 작업 방법을 재사용 스킬로 저장 (**사람이 승인해야** 활성화) | `/omniharness:skillify` → 검사 → `/omniharness:promote` |
+| **지식 위키** | 검증된 학습을 위키 문서로 축적 | `/omniharness:wiki-ingest` |
+| **작업 규칙** | 좋은 원칙(생각 먼저·단순하게·최소 변경·검증 먼저)을 매 세션 자동 로드 | `init`이 만드는 `AGENTS.md` |
+
+## 왜 Python 패키지가 없나
+
+같은 기능을 Python으로 새로 만들면 Claude Code에 **이미 있는 기능을 중복 구현**하게 됩니다.
+omniharness는 그러지 않고 **Claude Code 기본 기능(훅·스킬·서브에이전트·권한 설정)만 조합**합니다.
+그래서 더 가볍고, Claude Code가 업데이트돼도 깨질 위험이 적습니다.
 
 ## 설치 / 로컬 테스트
+
 ```bash
 # 설치
-/plugin marketplace add https://github.com/<owner>/omniharness
+/plugin marketplace add https://github.com/kbigdata/omniharness
 /plugin install omniharness
 
-# 로컬(미발행) 테스트
+# 아직 발행 안 한 로컬 버전으로 테스트
 claude --plugin-dir /path/to/omniharness
 ```
 
 ## 사용
+
 ```
-/omniharness:init               # 프로젝트를 하네스로 스캐폴드(헌법·권한·위키·인계)
-# (작업) 파괴 명령은 자동 차단, 검증은 evaluator 서브에이전트로 독립 수행
-/omniharness:skillify           # 성공 경험 → 재사용 스킬 후보(격리)
-/omniharness:promote <name>     # 사람 승인 → 활성화
-/omniharness:wiki-ingest        # 검증된 학습 → 위키
-/omniharness:wiki-lint          # 위키 drift 점검
+/omniharness:init               # 현재 프로젝트에 안전장치 초기 파일 생성(규칙·권한·위키·진행파일)
+# (이후 작업) 위험 명령은 자동 차단, 결과는 검증 에이전트가 따로 점검
+/omniharness:skillify           # 성공한 작업 → 재사용 스킬 후보로 저장
+/omniharness:promote <name>     # 사람이 확인 후 스킬 활성화
+/omniharness:wiki-ingest        # 검증된 학습 → 위키에 기록
+/omniharness:wiki-lint          # 위키 내용이 현실과 어긋났는지 점검
 ```
 
-## 검증
-- **오프라인(키 불필요)**: `bash tests/run.sh` — 훅/게이트 스크립트에 샘플 JSON 주입해 단언
-  (파괴/시크릿 deny, 정상 allow, 감사 기록, 스킬 격리·dedup·promote, Stop 가드, 스캐폴드).
-- **실제 Claude Code**: `claude --plugin-dir .` → 파괴 명령이 PreToolUse 훅에 **실제 차단**되는지 확인.
+## 동작 확인
 
-## 구조
+- **오프라인(API 키 불필요)**: `bash tests/run.sh`
+  — 훅 스크립트에 샘플 입력을 넣어 정상 동작을 확인합니다
+  (위험/비밀키 **차단**, 정상 명령 **허용**, 작업 기록, 스킬 저장·중복 제거·활성화, 종료 방지, 초기 파일 생성).
+- **실제 Claude Code**: `claude --plugin-dir .` 로 실행해 위험 명령이 **실제로 차단**되는지 확인.
+
+## 폴더 구조
+
 ```
-.claude-plugin/{plugin.json, marketplace.json}   # 매니페스트
-hooks/hooks.json                                 # PreToolUse·PostToolUse·Stop
-scripts/*.py, scaffold.sh                         # 훅/게이트/유틸(단일 스크립트, 프레임워크 아님)
-agents/evaluator.md                               # 신선 평가자
+.claude-plugin/{plugin.json, marketplace.json}   # 플러그인 정보
+hooks/hooks.json                                 # 어떤 훅을 언제 실행할지
+scripts/*.py, scaffold.sh                         # 훅·검사·초기화 스크립트 (낱개 스크립트, 프레임워크 아님)
+agents/evaluator.md                               # 독립 검증 에이전트
 skills/{init,skillify,wiki-ingest,promote,wiki-lint}/SKILL.md
-templates/                                        # init이 프로젝트로 복사
-docs/                                             # 갭분석·환경계층·하네스가정
-tests/run.sh                                      # 오프라인 검증
+templates/                                        # init이 프로젝트로 복사하는 초기 파일들
+docs/                                             # 설계 근거 문서
+tests/run.sh                                      # 오프라인 동작 확인
 ```
-화석화 방지(GAP §4.3): 각 스크립트가 "보완하는 모델 약점"을 docstring에 명시 → [`docs/하네스-가정.md`](docs/하네스-가정.md).
+
+각 스크립트는 **"왜 이 규칙이 필요한지(모델의 어떤 약점을 보완하는지)"** 를 주석에 적어둡니다.
+규칙이 낡았을 때 무엇을 점검·수정해야 할지 알 수 있게 하기 위함입니다 → [`docs/하네스-가정.md`](docs/하네스-가정.md).
+
+설계의 전체 근거: [`docs/하네스-엔지니어링-갭분석.md`](docs/하네스-엔지니어링-갭분석.md).
