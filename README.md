@@ -6,6 +6,8 @@
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![No Python framework](https://img.shields.io/badge/python-framework--free-blue)
 
+*[English README](README.en.md)*
+
 **omniharness**는 Claude Code에 **안전장치와 자동 점검**을 입히는 플러그인입니다.
 설치하면 어떤 프로젝트에서든 Claude가:
 
