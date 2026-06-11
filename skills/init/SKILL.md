@@ -8,7 +8,13 @@ description: 현재 프로젝트에 omniharness 하네스를 스캐폴드한다 
 헌법·권한·위키·장기실행 인계 아티팩트를 스캐폴드한다(기존 파일은 보존):
 
 ```bash
+# Linux / macOS (bash)
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/scaffold.sh"
+```
+
+```powershell
+# Windows (PowerShell) — bash 의존 없음
+powershell -ExecutionPolicy Bypass -File "$env:CLAUDE_PLUGIN_ROOT/scripts/scaffold.ps1"
 ```
 
 스캐폴드되는 것:

@@ -21,16 +21,35 @@ ASKABLE = ("git push", "git reset --hard", "git clean")
 # rm -rf 가 향하면 위험한 대상
 RM_TARGETS = {"/", "~", "*", "/*", "$home", "${home}", '"$home"', "'$home'"}
 
-# 시크릿 파일을 명령줄에서 직접 참조 (cat .env, scp id_rsa 등) — Read 도구 우회 차단.
-# .env.example/.sample/.template/.dist 등 안전 템플릿은 허용(과차단 방지).
+# --- Windows / PowerShell 보강 ---
+# PowerShell 파괴 명령 — 공백 정규화·소문자 cmd에 substring (cmd.exe rd/rmdir 패스스루 포함)
+PS_DESTRUCTIVE = (
+    "format-volume", "clear-disk", "stop-computer", "restart-computer",
+    "set-executionpolicy", "rd /s", "rmdir /s", "del /s", "del /q",
+)
+# PowerShell 삭제 명령 토큰(별칭 포함) — Remove-Item 및 그 alias
+PS_DELETE_VERBS = {"remove-item", "ri", "rm", "del", "erase", "rd", "rmdir", "rmi"}
+PS_RECURSE = {"-recurse", "-rec", "-r"}
+PS_FORCE = {"-force", "-fo", "-f"}
+# Remove-Item 등이 향하면 위험한 대상(소문자·따옴표 제거 후 비교)
+PS_RM_TARGETS = {
+    "c:", "c:\\", "d:", "d:\\", "e:", "e:\\", "/", "~", "*",
+    "$home", "${home}", "$env:userprofile", "$env:homepath",
+    "$env:systemroot", "$env:windir", "c:\\windows", "c:\\users",
+}
+
+# 시크릿 파일을 명령줄에서 직접 참조 (cat .env, Get-Content .env, scp id_rsa 등) — 도구 우회 차단.
+# .env.example/.sample/.template/.dist 등 안전 템플릿은 허용(과차단 방지). 슬래시·백슬래시 모두 인식.
 SECRET_IN_CMD = re.compile(
-    r"(^|[\s=:/'\"])\.env(?!\.(?:example|sample|template|dist|defaults)\b)(?:\.[^\s'\"/]+)?\b"
-    r"|/\.ssh/|\bid_rsa\b|\bid_ed25519\b|\.pem\b|/\.aws/(?:credentials|config)\b|/\.netrc\b",
+    r"(^|[\s=:/'\"\\])\.env(?!\.(?:example|sample|template|dist|defaults)\b)(?:\.[^\s'\"/\\]+)?\b"
+    r"|[/\\]\.ssh[/\\]|\bid_rsa\b|\bid_ed25519\b|\.pem\b"
+    r"|[/\\]\.aws[/\\](?:credentials|config)\b|[/\\]\.netrc\b",
     re.I,
 )
-# Read/Edit/Write file_path 용 시크릿 경로
+# Read/Edit/Write file_path 용 시크릿 경로 — 슬래시·백슬래시 모두 인식(Windows 경로 대응).
 SECRET_PATH = re.compile(
-    r"(^|/)\.(env|env\.[^/]+)$|/\.ssh/|/\.aws/credentials|id_rsa|id_ed25519|\.pem$|/\.netrc$",
+    r"(^|[/\\])\.(env|env\.[^/\\]+)$|[/\\]\.ssh[/\\]|[/\\]\.aws[/\\]credentials"
+    r"|id_rsa|id_ed25519|\.pem$|[/\\]\.netrc$",
     re.I,
 )
 
@@ -58,6 +77,41 @@ def rm_is_dangerous(cmd_norm):
     return False
 
 
+def ps_remove_is_dangerous(cmd_norm):
+    """PowerShell 삭제 명령이 recurse+force 로 위험 대상(드라이브 루트·$HOME·* 등)을 지우는가.
+
+    파라미터 순서·약식 표기(-rec, -fo)·-Confirm:$false·배시 습관 -rf 까지 대응.
+    """
+    toks = cmd_norm.split()
+    for i, t in enumerate(toks):
+        if t not in PS_DELETE_VERBS:
+            continue
+        recurse = force = False
+        args = []
+        for t2 in toks[i + 1:]:
+            if t2 in (";", "|", "&&", "||", "&"):
+                break
+            if t2 in PS_RECURSE or t2.startswith("-recurse"):
+                recurse = True
+            elif t2 in PS_FORCE:
+                force = True
+            elif t2.startswith("-confirm") and "false" in t2:
+                force = True
+            elif t2.startswith("-") and t2 != "-" and set(t2[1:]) <= {"r", "f"}:
+                # -rf / -fr 같은 묶음 플래그(배시 습관)만 해석 — -filter 등 오탐 방지
+                recurse = recurse or "r" in t2
+                force = force or "f" in t2
+            elif t2.startswith("-"):
+                pass  # 기타 PowerShell 파라미터는 무시
+            else:
+                a = t2.strip("'\"")
+                args.append(a)
+                args.append(a.rstrip("\\"))  # 후행 백슬래시 변형(c:\ ↔ c:)
+        if recurse and force and any(a in PS_RM_TARGETS for a in args):
+            return True
+    return False
+
+
 def out(decision, reason):
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse",
@@ -80,6 +134,19 @@ def main():
         if rm_is_dangerous(cmd):
             out("deny", "파괴적 rm 차단: recursive+force 가 위험 대상(/, ~, $HOME, *) 삭제")
         for p in DESTRUCTIVE:
+            if p in cmd:
+                out("deny", f"파괴적 명령 차단: {p!r}")
+        if SECRET_IN_CMD.search(raw):
+            out("deny", "시크릿 파일 접근 차단(명령줄에서 직접 참조)")
+        for p in ASKABLE:
+            if p in cmd:
+                out("ask", f"승인 권장: {p!r}")
+    if tool == "PowerShell":
+        raw = str(ti.get("command", ""))
+        cmd = " ".join(raw.lower().split())  # 공백 정규화 → 변형 차단
+        if ps_remove_is_dangerous(cmd):
+            out("deny", "파괴적 삭제 차단: PowerShell이 위험 대상(드라이브 루트, $HOME, *)을 recursive+force 삭제")
+        for p in PS_DESTRUCTIVE:
             if p in cmd:
                 out("deny", f"파괴적 명령 차단: {p!r}")
         if SECRET_IN_CMD.search(raw):
