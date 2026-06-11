@@ -69,6 +69,7 @@ Stated honestly:
 - **Not an unattended autonomous loop.** It does not auto-generate/update skills or wiki without a human. That needs an outer driver running *outside* the session — out of scope for this plugin (which runs *inside* the session).
 - **The completion gate only enforces the *existence* of a verify record.** It can't stop a workaround that skips the evaluator and forges a record.
 - **Rule *following* is not enforced.** `AGENTS.md` auto-loads, but obeying it is up to the model — only dangerous *actions* are blocked by code.
+- **Command blocking is a best-effort backstop, not a sandbox.** It catches common accidents and direct secret access, but not obfuscation, base64, or alternate-tool bypasses. The real boundary is Claude Code permissions + `settings.json` + not running untrusted code in the first place.
 
 ---
 
@@ -95,11 +96,12 @@ claude --plugin-dir /path/to/omniharness
 
 ## Verifying it works
 
-- **Offline (no API key)**: `bash tests/run.sh` — 24 assertions feeding sample input to the hook/gate scripts
-  (dangerous/secret blocked, normal allowed, completion gate block/allow, handoff injection, skill nudge·quarantine·dedup·promote, stop-guard, wiki lint).
-- **Real Claude Code (demonstrated)**: with `claude --plugin-dir .` we observed
-  ① SessionStart **actually injecting** handoff context, ② the Stop gate **actually blocking** an unverified completion (allowing it after a PASS record),
-  ③ PreToolUse **actually blocking** a dangerous command, ④ the PostToolUse `skill_nudge` **actually injecting** a `skillify` suggestion for a verified feature (received verbatim by the model).
+- **Offline (no API key)**: `bash tests/run.sh` — 42 assertions feeding sample input to the hook/gate scripts
+  (dangerous/secret blocked + **bypass cases**·over-block regressions, completion gate block/allow, handoff injection, skill nudge·quarantine·dedup·promote, stop-guard, next_feature, scaffold preserve/force, wiki-lint positive detection, two Stop hooks together).
+- **Live integration (auth required)**: `bash tests/live.sh` — uses real `claude --plugin-dir` to verify hook *wiring*
+  (SessionStart injection·Stop gate·`.env` block). Skips without auth. CI runs it only when the `ANTHROPIC_API_KEY` secret is set.
+- **Demonstrated**: SessionStart handoff **actually injected**, the Stop gate **actually blocking** an unverified completion (allow after PASS),
+  PreToolUse **actually blocking** `dd if=` and **`cat .env`** (no `.env` leak), `skill_nudge` suggestion **actually injected**.
 
 ## Folder layout
 
@@ -113,5 +115,6 @@ agents/evaluator.md                               # independent evaluation subag
 skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # starter files init copies into your project
 docs/                                             # design rationale
-tests/run.sh                                      # offline check (24 assertions)
+tests/run.sh                                      # offline check (42 assertions)
+tests/live.sh                                     # live integration smoke (auth / CI-guarded)
 ```

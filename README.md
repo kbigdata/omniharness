@@ -69,6 +69,7 @@
 - **무인 자율 루프가 아닙니다.** 스킬·위키를 사람 없이 자동 생성/갱신하지 않습니다. 그건 세션 *밖에서* 도는 외부 드라이버가 필요하며, 이 플러그인(세션 *안에서* 동작)의 범위 밖입니다.
 - **완료 게이트는 검증기록의 *존재*만 강제합니다.** evaluator를 건너뛰고 기록을 위조하는 우회까지 막지는 못합니다.
 - **규칙 *준수*는 강제가 아닙니다.** `AGENTS.md`는 자동 로드되지만 따르는 건 모델 몫입니다 — 코드로 막는 것은 위험 *행위*뿐입니다.
+- **위험 명령 차단은 최선노력 백스톱이지 샌드박스가 아닙니다.** 흔한 사고·직접적 시크릿 접근은 잡지만, 난독화·base64·대체 도구 우회까지 막지는 못합니다. 진짜 경계는 Claude Code 권한 + `settings.json` + 신뢰 못 할 코드를 애초에 실행하지 않는 것입니다.
 
 ---
 
@@ -95,11 +96,12 @@ claude --plugin-dir /path/to/omniharness
 
 ## 동작 확인
 
-- **오프라인(API 키 불필요)**: `bash tests/run.sh` — 훅/게이트 스크립트에 샘플 입력을 넣어 24개 단언
-  (위험·비밀키 차단, 정상 허용, 완료 게이트 차단/허용, 인계 주입, 스킬 유도·격리·중복·승급, 종료 차단, 위키 lint).
-- **실제 Claude Code(실증됨)**: `claude --plugin-dir .` 로
-  ① SessionStart가 인계 컨텍스트를 **실제 주입**, ② 미검증 완료를 Stop 게이트가 **실제 차단**(PASS 기록 후 허용),
-  ③ 위험 명령 PreToolUse **실제 차단**, ④ PostToolUse `skill_nudge`가 검증완료 기능에 `skillify` 제안을 **실제 주입**(모델이 그대로 수신) 함을 관찰했습니다.
+- **오프라인(API 키 불필요)**: `bash tests/run.sh` — 훅/게이트 스크립트에 샘플 입력을 넣어 42개 단언
+  (위험·비밀키 차단 + **우회 케이스**·과차단 회귀, 완료 게이트 차단/허용, 인계 주입, 스킬 유도·격리·중복·승급, 종료 차단, next_feature, scaffold 보존/force, 위키 lint 양성탐지, 두 Stop 훅 동시 동작).
+- **라이브 통합(인증 필요)**: `bash tests/live.sh` — 실제 `claude --plugin-dir`로 훅 *배선*을 검증
+  (SessionStart 주입·Stop 게이트·`.env` 차단). 인증 없으면 SKIP. CI는 `ANTHROPIC_API_KEY` 시크릿이 있을 때만 실행.
+- **실증 관찰됨**: SessionStart 인계 **실제 주입**, 미검증 완료 Stop 게이트 **실제 차단**(PASS 후 허용),
+  PreToolUse가 `dd if=`·**`cat .env`** **실제 차단**(.env 유출 없음), `skill_nudge` 제안 **실제 주입**.
 
 ## 폴더 구조
 
@@ -113,5 +115,6 @@ agents/evaluator.md                               # 독립 평가 서브에이�
 skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # init이 프로젝트로 복사하는 초기 파일들
 docs/                                             # 설계 근거 문서
-tests/run.sh                                      # 오프라인 동작 확인(24 단언)
+tests/run.sh                                      # 오프라인 동작 확인(42 단언)
+tests/live.sh                                     # 라이브 통합 스모크(인증 시 / CI 가드)
 ```
