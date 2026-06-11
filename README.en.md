@@ -98,7 +98,8 @@ claude --plugin-dir /path/to/omniharness
 - **Offline (no API key)**: `bash tests/run.sh` — 24 assertions feeding sample input to the hook/gate scripts
   (dangerous/secret blocked, normal allowed, completion gate block/allow, handoff injection, skill nudge·quarantine·dedup·promote, stop-guard, wiki lint).
 - **Real Claude Code (demonstrated)**: with `claude --plugin-dir .` we observed
-  ① SessionStart **actually injecting** handoff context, ② the Stop gate **actually blocking** an unverified completion, ③ PreToolUse **actually blocking** a dangerous command.
+  ① SessionStart **actually injecting** handoff context, ② the Stop gate **actually blocking** an unverified completion (allowing it after a PASS record),
+  ③ PreToolUse **actually blocking** a dangerous command, ④ the PostToolUse `skill_nudge` **actually injecting** a `skillify` suggestion for a verified feature (received verbatim by the model).
 
 ## Folder layout
 

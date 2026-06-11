@@ -98,7 +98,8 @@ claude --plugin-dir /path/to/omniharness
 - **오프라인(API 키 불필요)**: `bash tests/run.sh` — 훅/게이트 스크립트에 샘플 입력을 넣어 24개 단언
   (위험·비밀키 차단, 정상 허용, 완료 게이트 차단/허용, 인계 주입, 스킬 유도·격리·중복·승급, 종료 차단, 위키 lint).
 - **실제 Claude Code(실증됨)**: `claude --plugin-dir .` 로
-  ① SessionStart가 인계 컨텍스트를 **실제 주입**, ② 미검증 완료를 Stop 게이트가 **실제 차단**, ③ 위험 명령 PreToolUse **실제 차단** 을 관찰했습니다.
+  ① SessionStart가 인계 컨텍스트를 **실제 주입**, ② 미검증 완료를 Stop 게이트가 **실제 차단**(PASS 기록 후 허용),
+  ③ 위험 명령 PreToolUse **실제 차단**, ④ PostToolUse `skill_nudge`가 검증완료 기능에 `skillify` 제안을 **실제 주입**(모델이 그대로 수신) 함을 관찰했습니다.
 
 ## 폴더 구조
 
