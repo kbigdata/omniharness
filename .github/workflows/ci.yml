@@ -15,3 +15,14 @@ jobs:
           python-version: "3.12"
       - name: 오프라인 검증 (훅·게이트 스크립트)
         run: bash tests/run.sh
+
+      - name: 라이브 통합 스모크 (인증 시크릿 있을 때만)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "SKIP: ANTHROPIC_API_KEY 시크릿 미설정 — 라이브 스모크 생략(오프라인만 게이팅)."
+            exit 0
+          fi
+          npm i -g @anthropic-ai/claude-code
+          bash tests/live.sh
