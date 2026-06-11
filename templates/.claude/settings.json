@@ -5,6 +5,11 @@
       "Bash(rm -rf /*)",
       "Bash(rm -rf ~)",
       "Bash(sudo *)",
+      "PowerShell(*Format-Volume*)",
+      "PowerShell(*Clear-Disk*)",
+      "PowerShell(*Stop-Computer*)",
+      "PowerShell(*Restart-Computer*)",
+      "PowerShell(*Set-ExecutionPolicy*)",
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(~/.aws/credentials)",
@@ -15,7 +20,10 @@
     "ask": [
       "Bash(git push *)",
       "Bash(git reset --hard *)",
-      "Bash(git clean *)"
+      "Bash(git clean *)",
+      "PowerShell(*git push*)",
+      "PowerShell(*git reset --hard*)",
+      "PowerShell(*git clean*)"
     ]
   },
   "cleanupPeriodDays": 14
