@@ -26,13 +26,26 @@ printf '[]' > feature_list.json
 out="$(run '컨텍스트에 MARKER_ 로 시작하는 토큰이 있으면 그 토큰만, 없으면 NONE 출력. 다른 말 금지.')"
 echo "$out" | grep -q 'MARKER_LIVE_42' && echo "  ok: SessionStart 인계 주입" || { echo "  FAIL: SessionStart (out=$out)"; fail=1; }
 
-# ② 미검증 완료 → Stop 차단(=-p 최종출력 억제) / PASS 기록 후 → 허용
+# ② 미검증 완료 → Stop 차단 / PASS 기록 후 → 허용.
+#   현실적 픽스처: 실제 구현(greet.py)을 디스크에 둬 passes:true 가 정당 → 모델이 목록을 건드릴 이유가 없다.
+#   (이전 실패는 사양·구현 없는 가짜 항목을 모델이 정당하게 지운 것 — 픽스처 결함이었지 게이트 결함이 아니었다.
+#    비-git temp 라 evaluator 가 안 떠서 모델이 검증을 스스로 만족시킬 수 없다 → 차단이 유지된다.)
 rm -f claude-progress.txt
-printf '[{"description":"z","passes":true}]' > feature_list.json
+DESC='greet.py 에 greet(name) 인사 함수 구현'
+ORIG="[{\"description\":\"$DESC\",\"passes\":true}]"
+printf 'def greet(name):\n    return f"Hello, {name}!"\n' > greet.py
+printf '%s' "$ORIG" > feature_list.json
 rm -rf .omniharness
 blocked="$(run '정확히 이 토큰만 출력: DONE_TOKEN')"
-[ -z "$blocked" ] && echo "  ok: 미검증 완료 → Stop 차단" || echo "  WARN: Stop 차단 미관찰(환경차일 수 있음, out=$blocked)"
-python3 "$PLUGIN/scripts/verify_gate.py" --record "z" PASS "ok" >/dev/null
+nowfl="$(cat feature_list.json 2>/dev/null)"
+if [ "$nowfl" != "$ORIG" ]; then
+  echo "  WARN: 세션 중 feature_list 변경됨(정당한 항목인데 모델이 건드림, now=$nowfl)"
+elif [ -z "$blocked" ]; then
+  echo "  ok: 미검증 완료 → Stop 차단(목록 보존·검증기록 없음)"
+else
+  echo "  WARN: Stop 차단 미관찰(-p 종료 의미 차이일 수 있음, out=$blocked)"
+fi
+python3 "$PLUGIN/scripts/verify_gate.py" --record "$DESC" PASS "ok" >/dev/null
 allowed="$(run '정확히 이 토큰만 출력: DONE_TOKEN')"
 echo "$allowed" | grep -q 'DONE_TOKEN' && echo "  ok: PASS 기록 후 → 종료 허용" || { echo "  FAIL: gate allow (out=$allowed)"; fail=1; }
 
