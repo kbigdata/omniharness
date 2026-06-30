@@ -96,13 +96,15 @@ claude --plugin-dir /path/to/omniharness
 
 ## Verifying it works
 
-- **Offline (no API key)**: `bash tests/run.sh` — 42 assertions feeding sample input to the hook/gate scripts
-  (dangerous/secret blocked + **bypass cases**·over-block regressions, completion gate block/allow, handoff injection, skill nudge·quarantine·dedup·promote, stop-guard, next_feature, scaffold preserve/force, wiki-lint positive detection, two Stop hooks together).
+- **Offline (no API key)**: `bash tests/run.sh` — 43 assertions feeding sample input to the hook/gate scripts
+  (dangerous/secret blocked + **bypass cases**·over-block regressions, completion gate block/allow, handoff + **wiki-index** injection, skill nudge·quarantine·dedup·promote, stop-guard, next_feature, scaffold preserve/force, wiki-lint positive detection, two Stop hooks together).
 - **Live integration (auth required)**: `bash tests/live.sh` — uses real `claude --plugin-dir` to verify hook *wiring* and e2e flows
-  (SessionStart injection·Stop gate·`.env` block, **skill-capture e2e**, **wiki-ingest e2e**). Skips without auth. CI runs it only when the `ANTHROPIC_API_KEY` secret is set.
+  (Stop gate·`.env` block, **skill-capture e2e**, **wiki-ingest e2e**). Skips without auth. CI runs it only when the `ANTHROPIC_API_KEY` secret is set.
   - Advisory/enforced split: the model **writing** a candidate (advisory) is best-effort → WARN if absent; only the deterministic steps FAIL.
   - Enforced steps (`skill_gate` quarantine·no auto-activation·`promote`, `wiki_lint` clean) are asserted by **the harness invoking the scripts directly** — under headless `-p`, running a script outside the working dir hits a permission prompt that would otherwise mask the enforced step.
-- **Demonstrated**: SessionStart handoff **actually injected**, the Stop gate **actually blocking** an unverified completion (allow after PASS),
+  - **SessionStart injection (handoff·wiki index) is best-effort (WARN) in the live test** — under single-shot `-p`, `additionalContext` reaching the model is unreliable (measured ~50%, 0/6 in a tight loop). The **enforced assertion lives offline** (`session_context.py` run directly, at the hook-output level).
+- **Demonstrated**: SessionStart handoff·wiki-index **injection deterministically confirmed at hook-output level** (live model reach is intermittent),
+  the Stop gate **actually blocking** an unverified completion (allow after PASS),
   PreToolUse **actually blocking** `dd if=` and **`cat .env`** (no `.env` leak), `skill_nudge` suggestion **actually injected**,
   model-written candidate → `skill_gate` **actually quarantined** (inactive until promote, active after `promote`), model-written wiki page → `wiki_lint` **actually clean**.
 

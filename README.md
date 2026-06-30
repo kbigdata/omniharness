@@ -96,13 +96,15 @@ claude --plugin-dir /path/to/omniharness
 
 ## 동작 확인
 
-- **오프라인(API 키 불필요)**: `bash tests/run.sh` — 훅/게이트 스크립트에 샘플 입력을 넣어 42개 단언
-  (위험·비밀키 차단 + **우회 케이스**·과차단 회귀, 완료 게이트 차단/허용, 인계 주입, 스킬 유도·격리·중복·승급, 종료 차단, next_feature, scaffold 보존/force, 위키 lint 양성탐지, 두 Stop 훅 동시 동작).
+- **오프라인(API 키 불필요)**: `bash tests/run.sh` — 훅/게이트 스크립트에 샘플 입력을 넣어 43개 단언
+  (위험·비밀키 차단 + **우회 케이스**·과차단 회귀, 완료 게이트 차단/허용, 인계·**위키 인덱스** 주입, 스킬 유도·격리·중복·승급, 종료 차단, next_feature, scaffold 보존/force, 위키 lint 양성탐지, 두 Stop 훅 동시 동작).
 - **라이브 통합(인증 필요)**: `bash tests/live.sh` — 실제 `claude --plugin-dir`로 훅 *배선*과 e2e 흐름을 검증
-  (SessionStart 주입·Stop 게이트·`.env` 차단, **스킬 캡처 e2e**, **위키 ingest e2e**). 인증 없으면 SKIP. CI는 `ANTHROPIC_API_KEY` 시크릿이 있을 때만 실행.
+  (Stop 게이트·`.env` 차단, **스킬 캡처 e2e**, **위키 ingest e2e**). 인증 없으면 SKIP. CI는 `ANTHROPIC_API_KEY` 시크릿이 있을 때만 실행.
   - 권고/강제 분리: 모델이 후보를 **작성**(권고)하는 단계는 best-effort라 미생성 시 WARN, 결정론 단계만 FAIL이다.
   - 강제 단계(`skill_gate` 격리·자동활성금지·`promote` 승급, `wiki_lint` clean)는 **하네스가 스크립트를 직접 호출**해 단언한다 — `-p` 헤드리스에선 워킹디렉터리 밖 스크립트 실행이 권한 프롬프트로 막혀 강제 단계가 가려지기 때문.
-- **실증 관찰됨**: SessionStart 인계 **실제 주입**, 미검증 완료 Stop 게이트 **실제 차단**(PASS 후 허용),
+  - **SessionStart 주입(인계·위키 인덱스)은 라이브에선 best-effort(WARN)** — `-p` 단발 모드에서 `additionalContext`의 모델 도달이 불안정(실측 ~50%, 6연타 0/6)하기 때문. **강제 단언은 오프라인**(`session_context.py` 직접 실행, 훅-출력 레벨)에서 결정적으로 한다.
+- **실증 관찰됨**: SessionStart 인계·위키 인덱스 **훅-출력 레벨 주입 결정적 확인**(라이브 실모델 도달은 간헐),
+  미검증 완료 Stop 게이트 **실제 차단**(PASS 후 허용),
   PreToolUse가 `dd if=`·**`cat .env`** **실제 차단**(.env 유출 없음), `skill_nudge` 제안 **실제 주입**,
   모델 작성 후보 → `skill_gate` **실제 격리**(승급 전 비활성, `promote` 후 활성), 모델 작성 위키 페이지 → `wiki_lint` **실제 clean**.
 

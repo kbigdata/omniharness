@@ -98,9 +98,15 @@ echo "== session_context.py (인계 자동 주입) =="
 t5="$(mktemp -d)"
 printf '세션1: 기반 구축 완료\n' > "$t5/claude-progress.txt"
 printf '[{"description":"f1","passes":false}]' > "$t5/feature_list.json"
+mkdir -p "$t5/wiki"
+printf -- '---\ntitle: idx\n---\nWIKI_IDX_MARK 개념·엔티티 카탈로그\n' > "$t5/wiki/index.md"
 out="$(printf '{}' | CLAUDE_PROJECT_DIR="$t5" python3 "$ROOT/scripts/session_context.py")"
-printf '%s' "$out" | python3 -c "import sys,json;d=json.load(sys.stdin);assert d['hookSpecificOutput']['hookEventName']=='SessionStart' and d['hookSpecificOutput']['additionalContext']" 2>/dev/null \
+printf '%s' "$out" | python3 -c "import sys,json;d=json.load(sys.stdin);c=d['hookSpecificOutput']['additionalContext'];assert d['hookSpecificOutput']['hookEventName']=='SessionStart' and '세션1' in c" 2>/dev/null \
   && ok "진행상황 additionalContext 주입" || bad "session_context (out=$out)"
+# 위키 자동 노출(결정적): wiki/index.md 가 additionalContext 에 주입돼야 한다.
+#   라이브(-p)는 SessionStart 도달이 불안정해 best-effort WARN — 강제 단언은 여기 훅-출력 레벨에서.
+printf '%s' "$out" | python3 -c "import sys,json;c=json.load(sys.stdin)['hookSpecificOutput']['additionalContext'];assert 'WIKI_IDX_MARK' in c" 2>/dev/null \
+  && ok "위키 인덱스 additionalContext 주입" || bad "session_context wiki (out=$out)"
 # 관련 파일 전무하면 무개입
 t5b="$(mktemp -d)"
 out2="$(printf '{}' | CLAUDE_PROJECT_DIR="$t5b" python3 "$ROOT/scripts/session_context.py")"
