@@ -64,7 +64,7 @@ Successful work is **not auto-generated** into skills. Instead, a 4-step path:
 
 ## Limits (non-goals)
 
-- **The plugin alone is not an unattended autonomous loop.** It does not auto-generate/update skills or wiki without a human. A fully autonomous loop is handled by an outer driver running *outside* the session (roadmap: [`docs/자동루프-설계.md`](docs/자동루프-설계.md)); the plugin provides the in-session foundation that driver builds on.
+- **The plugin hooks themselves are not an unattended autonomous loop.** Hooks only enforce/verify *inside* the session. A fully autonomous loop is handled by the *outside*-the-session driver [`scripts/autoloop.py`](scripts/autoloop.py) (**experimental** — 47 offline assertions + three live-model e2e passes (success run · forgery-defense escalate · pre-forged re-verify); broader validation still pending). Design·rules: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
 - **The completion gate only enforces the *existence* of a verify record.** It can't stop a workaround that skips the evaluator and forges a record.
 - **Rule *following* is not enforced.** `AGENTS.md` auto-loads, but obeying it is up to the model — only dangerous *actions* are blocked by code.
 - **Command blocking is a best-effort backstop, not a sandbox.** It catches common accidents and direct secret access, but not obfuscation, base64, or alternate-tool bypasses. The real boundary is Claude Code permissions + `settings.json` + not running untrusted code in the first place.
@@ -94,10 +94,21 @@ claude --plugin-dir /path/to/omniharness
 
 > New-project setup (detailed): [`docs/적용-매뉴얼.md`](docs/적용-매뉴얼.md)
 
+### (Experimental) Fully autonomous loop
+
+An *outside*-the-session driver takes `feature_list.json` and repeats **implement → out-of-model verify → regression → commit** unattended. Cross-platform (Python + subprocess, no SDK).
+
+```bash
+python3 scripts/autoloop.py --project . --regress "pytest -q"   # or scripts/autoloop.sh / .ps1 / .bat
+python3 scripts/autoloop.py --project . --dry-run               # control flow only, no claude
+```
+
+> **Caution**: the default `--permission-mode` is `bypassPermissions` (so the evaluator can actually run tests) — run **only in an isolated environment (container)**. Verified: offline control flow + three live-model e2e (success run · forgery-defense escalate · pre-forged re-verify). Five rules·blockers: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
+
 ## Verifying it works
 
-- **Offline (no API key)**: `bash tests/run.sh` — 43 assertions feeding sample input to the hook/gate scripts
-  (dangerous/secret blocked + **bypass cases**·over-block regressions, completion gate block/allow, handoff + **wiki-index** injection, skill nudge·quarantine·dedup·promote, stop-guard, next_feature, scaffold preserve/force, wiki-lint positive detection, two Stop hooks together).
+- **Offline (no API key)**: `bash tests/run.sh` — 47 assertions feeding sample input to the hook/gate scripts
+  (dangerous/secret blocked + **bypass cases**·over-block regressions, completion gate block/allow, handoff + **wiki-index** injection, skill nudge·quarantine·dedup·promote, stop-guard, next_feature, scaffold preserve/force, wiki-lint positive detection, two Stop hooks together, **autonomous-loop driver** (control flow·escalate·forgery-defense)).
 - **Live integration (auth required)**: `bash tests/live.sh` — uses real `claude --plugin-dir` to verify hook *wiring* and e2e flows
   (Stop gate·`.env` block, **skill-capture e2e**, **wiki-ingest e2e**). Skips without auth. CI runs it only when the `ANTHROPIC_API_KEY` secret is set.
   - Advisory/enforced split: the model **writing** a candidate (advisory) is best-effort → WARN if absent; only the deterministic steps FAIL.
@@ -116,10 +127,11 @@ hooks/hooks.json                                 # registers SessionStart·PreTo
 scripts/                                          # hook·gate·util scripts (individual scripts)
   policy.py audit.py stop_guard.py verify_gate.py session_context.py skill_nudge.py
   skill_gate.py promote.py wiki_lint.py next_feature.py scaffold.sh scaffold.ps1
+  autoloop.py autoloop.sh autoloop.ps1 autoloop.bat  # (experimental) outside-session autonomous driver
 agents/evaluator.md                               # independent evaluation subagent
 skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # starter files init copies into your project
 docs/                                             # design rationale
-tests/run.sh                                      # offline check (43 assertions)
+tests/run.sh                                      # offline check (47 assertions)
 tests/live.sh                                     # live integration smoke (auth / CI-guarded)
 ```

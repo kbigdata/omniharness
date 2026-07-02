@@ -171,6 +171,36 @@ vg2="$(printf '{}' | CLAUDE_PROJECT_DIR="$ts" python3 "$ROOT/scripts/verify_gate
 { [ -z "$sg2" ] && [ -z "$vg2" ]; } && ok "검증후: 두 훅 모두 종료 허용" || bad "two-stop B (sg2=$sg2 vg2=$vg2)"
 rm -rf "$ts"
 
+# --- autoloop.py 자율 루프 드라이버 (오프라인 제어흐름, 실제 claude 없이 --dry-run) ---
+echo "== autoloop.py (자율 루프 드라이버) =="
+python3 -c "
+import sys; sys.path.insert(0,'$ROOT/scripts'); import autoloop as a
+assert a.parse_verdict('PASS: 충족')=='PASS'
+assert a.parse_verdict('분석...\nFAIL: greet.py 없음')=='FAIL'
+assert a.parse_verdict('FAIL 조건 없음\nPASS: 모든 기준 통과')=='PASS'   # 본문 FAIL 단어 오탐 방지
+assert a.parse_verdict('판정 라인 없는 애매한 출력')=='FAIL'            # 보수적
+" 2>/dev/null && ok "parse_verdict 최종판정라인·오탐방지·보수적" || bad "parse_verdict"
+
+alp="$(mktemp -d)"; printf '[{"description":"A","passes":false},{"description":"B","passes":false}]' > "$alp/feature_list.json"
+python3 "$ROOT/scripts/autoloop.py" --project "$alp" --dry-run --regress "true" >/dev/null 2>&1; alrc=$?
+allpass="$(python3 -c "import json;print(all(f['passes'] for f in json.load(open('$alp/feature_list.json'))))")"
+{ [ "$alrc" -eq 0 ] && [ "$allpass" = "True" ] && [ -d "$alp/.omniharness/verify" ]; } \
+  && ok "dry-run 전체 통과·드라이버 단독기록·exit0" || bad "autoloop dry-run (rc=$alrc pass=$allpass)"
+
+alp2="$(mktemp -d)"; printf '[{"description":"X","passes":false}]' > "$alp2/feature_list.json"
+python3 "$ROOT/scripts/autoloop.py" --project "$alp2" --dry-run --regress "false" --retries 1 >/dev/null 2>&1; alrc2=$?
+stillfalse="$(python3 -c "import json;print(json.load(open('$alp2/feature_list.json'))[0]['passes'])")"
+{ [ "$alrc2" -eq 1 ] && [ "$stillfalse" = "False" ]; } \
+  && ok "회귀 실패 → 재시도소진·보류·exit1·passes 유지" || bad "autoloop escalate (rc=$alrc2 false=$stillfalse)"
+
+# 위조 방어(규율1): 디스크에 passes:true(위조)여도 드라이버는 verified 기준 → 검증 실패면 false 강제.
+alp3="$(mktemp -d)"; printf '[{"description":"Z","passes":true}]' > "$alp3/feature_list.json"
+python3 "$ROOT/scripts/autoloop.py" --project "$alp3" --dry-run --regress "false" --retries 0 >/dev/null 2>&1; alrc3=$?
+zfalse="$(python3 -c "import json;print(json.load(open('$alp3/feature_list.json'))[0]['passes'])")"
+{ [ "$alrc3" -eq 1 ] && [ "$zfalse" = "False" ]; } \
+  && ok "위조 passes:true 무시 → 검증 실패 시 false 강제·exit1" || bad "autoloop 위조방어 (rc=$alrc3 false=$zfalse)"
+rm -rf "$alp" "$alp2" "$alp3"
+
 # --- JSON 유효성 ---
 echo "== JSON 유효성 =="
 for f in .claude-plugin/plugin.json .claude-plugin/marketplace.json hooks/hooks.json; do
