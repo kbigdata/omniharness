@@ -9,9 +9,9 @@
 *[한국어 README](README.md)*
 
 **omniharness** adds an **enforced safety net · a completion-verification gate · automatic handoff context ·
-skill/wiki accumulation** to Claude Code. Install with a single `/omniharness:init`.
+skill/wiki accumulation** to Claude Code. Install with `/plugin install`, then apply to a project with `/omniharness:init`.
 
-This README clearly separates **what is enforced by code** from **what is left to the model as advice** — no overclaiming.
+What is enforced by code and what is left to the model as advice are separated in the table below.
 
 > What you install is just a few Markdown, JSON, and Python/shell files. (No Python package or framework.)
 
@@ -55,7 +55,7 @@ This README clearly separates **what is enforced by code** from **what is left t
 
 ## 🤖 Hermes — triggered skill capture (NOT auto-generation)
 
-Successful work is **not auto-generated** into skills. Instead, an honest 4-step path:
+Successful work is **not auto-generated** into skills. Instead, a 4-step path:
 
 1. **Nudge (auto-injected)** — when a feature completes with verification, a hook suggests `/omniharness:skillify`.
 2. **Write (model)** — `/omniharness:skillify` has the model draft a skill candidate.
@@ -64,9 +64,7 @@ Successful work is **not auto-generated** into skills. Instead, an honest 4-step
 
 ## Limits (non-goals)
 
-Stated honestly:
-
-- **Not an unattended autonomous loop.** It does not auto-generate/update skills or wiki without a human. That needs an outer driver running *outside* the session — out of scope for this plugin (which runs *inside* the session).
+- **The plugin alone is not an unattended autonomous loop.** It does not auto-generate/update skills or wiki without a human. A fully autonomous loop is handled by an outer driver running *outside* the session (roadmap: [`docs/자동루프-설계.md`](docs/자동루프-설계.md)); the plugin provides the in-session foundation that driver builds on.
 - **The completion gate only enforces the *existence* of a verify record.** It can't stop a workaround that skips the evaluator and forges a record.
 - **Rule *following* is not enforced.** `AGENTS.md` auto-loads, but obeying it is up to the model — only dangerous *actions* are blocked by code.
 - **Command blocking is a best-effort backstop, not a sandbox.** It catches common accidents and direct secret access, but not obfuscation, base64, or alternate-tool bypasses. The real boundary is Claude Code permissions + `settings.json` + not running untrusted code in the first place.
@@ -94,6 +92,8 @@ claude --plugin-dir /path/to/omniharness
 /omniharness:wiki-lint          # check the wiki for drift
 ```
 
+> New-project setup (detailed): [`docs/적용-매뉴얼.md`](docs/적용-매뉴얼.md)
+
 ## Verifying it works
 
 - **Offline (no API key)**: `bash tests/run.sh` — 43 assertions feeding sample input to the hook/gate scripts
@@ -115,11 +115,11 @@ claude --plugin-dir /path/to/omniharness
 hooks/hooks.json                                 # registers SessionStart·PreToolUse·PostToolUse·Stop
 scripts/                                          # hook·gate·util scripts (individual scripts)
   policy.py audit.py stop_guard.py verify_gate.py session_context.py skill_nudge.py
-  skill_gate.py promote.py wiki_lint.py next_feature.py scaffold.sh
+  skill_gate.py promote.py wiki_lint.py next_feature.py scaffold.sh scaffold.ps1
 agents/evaluator.md                               # independent evaluation subagent
 skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # starter files init copies into your project
 docs/                                             # design rationale
-tests/run.sh                                      # offline check (42 assertions)
+tests/run.sh                                      # offline check (43 assertions)
 tests/live.sh                                     # live integration smoke (auth / CI-guarded)
 ```

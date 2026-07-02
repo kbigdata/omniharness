@@ -9,9 +9,9 @@
 *[English README](README.en.md)*
 
 **omniharness**는 Claude Code에 **강제 안전망 · 완료 검증 게이트 · 인계 자동 노출 · 스킬/위키 적재**를
-더하는 플러그인입니다. `/omniharness:init` 한 번으로 설치됩니다.
+더하는 플러그인입니다. `/plugin install`로 설치하고 `/omniharness:init`으로 프로젝트에 적용합니다.
 
-이 README는 **무엇이 코드로 강제되고, 무엇이 모델에게 맡겨진 권고인지** 분명히 구분합니다 — 과장하지 않습니다.
+무엇이 코드로 강제되고, 무엇이 모델에게 맡겨진 권고인지 아래 표에서 구분합니다.
 
 > 설치물은 마크다운·JSON·파이썬/셸 스크립트 몇 개뿐입니다. (Python 패키지·프레임워크 없음)
 
@@ -55,7 +55,7 @@
 
 ## 🤖 Hermes — 트리거형 스킬 캡처 (자동 생성 아님)
 
-성공한 작업을 재사용 스킬로 **자동 생성하지 않습니다.** 대신 정직한 4단계입니다:
+성공한 작업을 재사용 스킬로 **자동 생성하지 않습니다.** 대신 4단계로 나눕니다:
 
 1. **유도(자동 주입)** — 기능이 검증 통과로 완료되면 훅이 "재사용 절차면 `/omniharness:skillify` 하라"고 제안.
 2. **작성(모델)** — `/omniharness:skillify`로 모델이 스킬 후보를 씀.
@@ -64,9 +64,7 @@
 
 ## 한계 (비목표)
 
-정직하게 밝힙니다:
-
-- **무인 자율 루프가 아닙니다.** 스킬·위키를 사람 없이 자동 생성/갱신하지 않습니다. 그건 세션 *밖에서* 도는 외부 드라이버가 필요하며, 이 플러그인(세션 *안에서* 동작)의 범위 밖입니다.
+- **현재 플러그인 단독으로는 무인 자율 루프가 아닙니다.** 스킬·위키를 사람 없이 자동 생성/갱신하지 않습니다. 완전 자율 루프는 세션 *밖에서* 도는 외부 드라이버가 담당하며(로드맵: [`docs/자동루프-설계.md`](docs/자동루프-설계.md)), 이 플러그인은 그 드라이버가 얹힐 세션 *안* 기반을 제공합니다.
 - **완료 게이트는 검증기록의 *존재*만 강제합니다.** evaluator를 건너뛰고 기록을 위조하는 우회까지 막지는 못합니다.
 - **규칙 *준수*는 강제가 아닙니다.** `AGENTS.md`는 자동 로드되지만 따르는 건 모델 몫입니다 — 코드로 막는 것은 위험 *행위*뿐입니다.
 - **위험 명령 차단은 최선노력 백스톱이지 샌드박스가 아닙니다.** 흔한 사고·직접적 시크릿 접근은 잡지만, 난독화·base64·대체 도구 우회까지 막지는 못합니다. 진짜 경계는 Claude Code 권한 + `settings.json` + 신뢰 못 할 코드를 애초에 실행하지 않는 것입니다.
@@ -94,6 +92,8 @@ claude --plugin-dir /path/to/omniharness
 /omniharness:wiki-lint          # 위키 drift 점검
 ```
 
+> 새 프로젝트 적용 절차(상세): [`docs/적용-매뉴얼.md`](docs/적용-매뉴얼.md)
+
 ## 동작 확인
 
 - **오프라인(API 키 불필요)**: `bash tests/run.sh` — 훅/게이트 스크립트에 샘플 입력을 넣어 43개 단언
@@ -115,11 +115,11 @@ claude --plugin-dir /path/to/omniharness
 hooks/hooks.json                                 # SessionStart·PreToolUse·PostToolUse·Stop 등록
 scripts/                                          # 훅·게이트·유틸 (낱개 스크립트)
   policy.py audit.py stop_guard.py verify_gate.py session_context.py skill_nudge.py
-  skill_gate.py promote.py wiki_lint.py next_feature.py scaffold.sh
+  skill_gate.py promote.py wiki_lint.py next_feature.py scaffold.sh scaffold.ps1
 agents/evaluator.md                               # 독립 평가 서브에이전트
 skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # init이 프로젝트로 복사하는 초기 파일들
 docs/                                             # 설계 근거 문서
-tests/run.sh                                      # 오프라인 동작 확인(42 단언)
+tests/run.sh                                      # 오프라인 동작 확인(43 단언)
 tests/live.sh                                     # 라이브 통합 스모크(인증 시 / CI 가드)
 ```
