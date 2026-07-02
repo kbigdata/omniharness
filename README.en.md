@@ -33,7 +33,7 @@ What is enforced by code and what is left to the model as advice are separated i
 | Working-rules load | 🔁 auto / following is advice | `AGENTS.md` auto-loads each session. **Following its content is model advice**, not enforced |
 | *Writing* skills · *writing* wiki | ✍️ **Model advice** | Extraction·page authoring is done **by the model**. The plugin only triggers·gates·checks |
 
-🔒 Enforced = code blocks/runs even if the model refuses. 🔁 Auto-injected = a hook feeds context in. ✍️ Advice = the model still has to do it.
+🔒 Enforced = code blocks/runs even if the model refuses. 🔁 Auto-injected = a hook automatically inserts the needed information into context, without the model asking. ✍️ Advice = the model still has to do it.
 
 ---
 
@@ -41,7 +41,7 @@ What is enforced by code and what is left to the model as advice are separated i
 
 > *A hook = a script Claude Code runs automatically before/after a tool, at session start, or at stop.*
 
-- **Block dangerous commands** — if the model tries `rm -rf /`·`sudo`·reading secrets, it's denied **before** the tool runs. Permission settings + hook, two layers.
+- **Block dangerous commands** — if the model tries `rm -rf /`·`sudo`·reading secrets, it's denied **before** the tool runs. Two layers of defense: permission settings + the hook.
 - **Completion gate** — the model easily believes its own output is "done" (self-eval bias). So **finishing is impossible without verification**: `/omniharness:verify` runs the independent `evaluator` for a PASS/FAIL and records it; without that PASS record, **stopping is blocked**.
 - **No early exit** — if `feature_list.json` has unfinished features, stopping is blocked (requires the list to be populated).
 - **Activity log** — every tool call is recorded to `audit.jsonl`.
@@ -113,7 +113,7 @@ python3 scripts/autoloop.py --project . --dry-run               # control flow o
   (Stop gate·`.env` block, **skill-capture e2e**, **wiki-ingest e2e**). Skips without auth. CI runs it only when the `ANTHROPIC_API_KEY` secret is set.
   - Advisory/enforced split: the model **writing** a candidate (advisory) is best-effort → WARN if absent; only the deterministic steps FAIL.
   - Enforced steps (`skill_gate` quarantine·no auto-activation·`promote`, `wiki_lint` clean) are asserted by **the harness invoking the scripts directly** — under headless `-p`, running a script outside the working dir hits a permission prompt that would otherwise mask the enforced step.
-  - **SessionStart injection (handoff·wiki index) is best-effort (WARN) in the live test** — under single-shot `-p`, `additionalContext` reaching the model is unreliable (measured ~50%, 0/6 in a tight loop). The **enforced assertion lives offline** (`session_context.py` run directly, at the hook-output level).
+  - **SessionStart injection (handoff·wiki index) is best-effort (WARN) in the live test** — under single-shot `-p`, `additionalContext` reaching the model is unreliable (measured ~50%, 0/6 across six consecutive runs). The **enforced assertion lives offline** (`session_context.py` run directly, at the hook-output level).
 - **Demonstrated**: SessionStart handoff·wiki-index **injection deterministically confirmed at hook-output level** (live model reach is intermittent),
   the Stop gate **actually blocking** an unverified completion (allow after PASS),
   PreToolUse **actually blocking** `dd if=` and **`cat .env`** (no `.env` leak), `skill_nudge` suggestion **actually injected**,
