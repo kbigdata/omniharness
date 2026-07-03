@@ -64,7 +64,7 @@ Successful work is **not auto-generated** into skills. Instead, a 4-step path:
 
 ## Limits (non-goals)
 
-- **The plugin hooks themselves are not an unattended autonomous loop.** Hooks only enforce/verify *inside* the session. A fully autonomous loop is handled by the *outside*-the-session driver [`scripts/autoloop.py`](scripts/autoloop.py) (**experimental** — 47 offline assertions + three live-model e2e passes (success run · forgery-defense escalate · pre-forged re-verify); broader validation still pending). Design·rules: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
+- **The plugin hooks themselves are not an unattended autonomous loop.** Hooks only enforce/verify *inside* the session. A fully autonomous loop is handled by the *outside*-the-session driver [`scripts/autoloop.py`](scripts/autoloop.py) (**experimental** — 47 offline assertions + live-model validation: single-feature run · two forgery defenses · multi-feature chain · real regression-break detection · impossible-feature escalate-and-continue). Design·rules·validation log: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
 - **The completion gate only enforces the *existence* of a verify record.** It can't stop a workaround that skips the evaluator and forges a record.
 - **Rule *following* is not enforced.** `AGENTS.md` auto-loads, but obeying it is up to the model — only dangerous *actions* are blocked by code.
 - **Command blocking is a best-effort backstop, not a sandbox.** It catches common accidents and direct secret access, but not obfuscation, base64, or alternate-tool bypasses. The real boundary is Claude Code permissions + `settings.json` + not running untrusted code in the first place.
@@ -103,7 +103,7 @@ python3 scripts/autoloop.py --project . --regress "pytest -q"   # or scripts/aut
 python3 scripts/autoloop.py --project . --dry-run               # control flow only, no claude
 ```
 
-> **Caution**: the default `--permission-mode` is `bypassPermissions` (so the evaluator can actually run tests) — run **only in an isolated environment (container)**. Verified: offline control flow + three live-model e2e (success run · forgery-defense escalate · pre-forged re-verify). Five rules·blockers: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
+> **Caution**: the default `--permission-mode` is `bypassPermissions` (so the evaluator can actually run tests) — run **only in an isolated environment (container)**. In unattended environments, pin the claude binary with `CLAUDE_BIN`. Verified: 47 offline assertions + live-model (single run · forgery defense · multi-feature chain · regression-break detection · stall escalate/continue). Five rules·blockers: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
 
 ## Verifying it works
 

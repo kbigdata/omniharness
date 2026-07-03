@@ -92,9 +92,11 @@ def build_handoff(root, desc):
 # ---- claude 구동 (subprocess, 크로스플랫폼) ----
 
 def claude_bin():
-    b = shutil.which("claude")
-    if not b:
-        log("ERROR: claude CLI 를 PATH 에서 찾지 못함")
+    """CLAUDE_BIN 환경변수 우선, 없으면 PATH 탐색. 무인/컨테이너 환경에선 PATH 초기화가
+    비결정적일 수 있으므로(nvm 등) CLAUDE_BIN 으로 절대경로를 고정하는 것을 권장."""
+    b = os.environ.get("CLAUDE_BIN") or shutil.which("claude")
+    if not b or not os.path.exists(b):
+        log("ERROR: claude CLI 를 찾지 못함 (PATH 또는 CLAUDE_BIN 확인)")
         sys.exit(2)
     return b
 
@@ -110,7 +112,10 @@ def run_claude(prompt, cwd, max_turns, timeout, permission_mode, agent=None, plu
         cmd += ["--agent", agent]
     try:
         r = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, timeout=timeout)
-        return r.stdout or ""
+        out = r.stdout or ""
+        if not out.strip() and (r.stderr or "").strip():  # 관측성: 빈 출력의 원인(stderr)을 남긴다
+            log(f"  (claude stderr: {' '.join(r.stderr.split())[:200]})")
+        return out
     except subprocess.TimeoutExpired:
         log(f"  (타임아웃 {timeout}s — 제어 회복, 규율5)")
         return ""
@@ -214,9 +219,13 @@ def main():
             # 2) 검증 — fresh 격리 evaluator(규율3), 모델 밖(규율1)
             # evaluator 는 Read/Bash 로 테스트를 *직접 실행*해 검증한다(plan 모드면 도구 실행 불가 →
             # 검증 못 함). Write/Edit 은 evaluator 정의의 disallowedTools 가 막으므로 편집은 불가능.
-            vout = run_claude(f"이 작업이 충족됐는지 작업트리만 보고 PASS/FAIL 로 판정하라.\n목표: {desc}",
-                              root, args.max_turns, args.timeout, args.permission_mode,
-                              agent="evaluator", plugin_dir=pd)
+            eval_prompt = (f"이 작업이 충족됐는지 작업트리만 보고 PASS/FAIL 로 판정하라.\n목표: {desc}")
+            vout = run_claude(eval_prompt, root, args.max_turns, args.timeout,
+                              args.permission_mode, agent="evaluator", plugin_dir=pd)
+            if not vout.strip():  # 빈 출력 = 판정이 아니라 인프라 오류 가능성 → 1회만 재시도
+                log("    (evaluator 빈 출력 — 1회 재시도)")
+                vout = run_claude(eval_prompt, root, args.max_turns, args.timeout,
+                                  args.permission_mode, agent="evaluator", plugin_dir=pd)
             verdict, evidence = parse_verdict(vout), vout.strip()
             # 3) 회귀(규율4)
             regress_ok = run_regression(args.regress, root, args.timeout)
@@ -235,6 +244,9 @@ def main():
             retries[desc] = retries.get(desc, 0) + 1
             why = "회귀 실패" if verdict == "PASS" else f"검증 {verdict}"
             log(f"    ✗ {why} (재시도 {retries[desc]}/{args.retries})")
+            if verdict == "FAIL" and not args.dry_run:  # 관측성: FAIL 사유를 남긴다(막힘 진단용)
+                snippet = " ".join(evidence.split())[:300] or "(빈 출력 — 타임아웃/오류 가능)"
+                log(f"      └ evaluator: {snippet}")
             if retries[desc] > args.retries:
                 skipped.append(desc)
                 log(f"    ⚠ 재시도 한도 초과 → 보류(escalate): {desc}")
