@@ -101,9 +101,12 @@ claude --plugin-dir /path/to/omniharness
 ```bash
 python3 scripts/autoloop.py --project . --regress "pytest -q"   # 또는 scripts/autoloop.sh / .ps1 / .bat
 python3 scripts/autoloop.py --project . --dry-run               # claude 없이 제어흐름만
+
+# 컨테이너 격리 무인 운영(권장) — 이미지 빌드 후 플러그인 ro·자격증명 주입해 실행
+docker build -t omniharness-autoloop docker/
 ```
 
-> **주의**: 기본 `--permission-mode`는 `bypassPermissions`(evaluator가 테스트를 직접 실행하려면 필요) — **반드시 격리 환경(컨테이너)에서** 운영하세요. 무인 환경에선 `CLAUDE_BIN`으로 claude 절대경로 고정을 권장합니다. 검증: 오프라인 47단언 + 실모델(단일 완주·위조 방어·다기능 연쇄·회귀 파손 감지·막힘 보류/계속 진행). 5개 규율·차단점: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
+> **주의**: 기본 `--permission-mode`는 `bypassPermissions`(evaluator가 테스트를 직접 실행하려면 필요) — **반드시 격리 환경(컨테이너)에서** 운영하세요. 무인 환경에선 `CLAUDE_BIN`으로 claude 절대경로 고정을 권장합니다. 검증: 오프라인 47단언 + 실모델(단일 완주·위조 방어·다기능 연쇄·회귀 파손 감지·막힘 보류/계속 진행) + **컨테이너 격리 무인 완주**(2기능·누적 회귀·호스트 쓰기 0). 5개 규율·차단점·운영 교훈: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
 
 ## 동작 확인
 
@@ -128,6 +131,7 @@ scripts/                                          # 훅·게이트·유틸 (낱�
   policy.py audit.py stop_guard.py verify_gate.py session_context.py skill_nudge.py
   skill_gate.py promote.py wiki_lint.py next_feature.py scaffold.sh scaffold.ps1
   autoloop.py autoloop.sh autoloop.ps1 autoloop.bat  # (실험적) 세션 밖 자율 루프 드라이버
+docker/Dockerfile                                 # (실험적) 자율 루프 격리 실행 이미지
 agents/evaluator.md                               # 독립 평가 서브에이전트
 skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # init이 프로젝트로 복사하는 초기 파일들

@@ -101,9 +101,12 @@ An *outside*-the-session driver takes `feature_list.json` and repeats **implemen
 ```bash
 python3 scripts/autoloop.py --project . --regress "pytest -q"   # or scripts/autoloop.sh / .ps1 / .bat
 python3 scripts/autoloop.py --project . --dry-run               # control flow only, no claude
+
+# Isolated container operation (recommended) — build the image, mount plugin ro, inject credentials
+docker build -t omniharness-autoloop docker/
 ```
 
-> **Caution**: the default `--permission-mode` is `bypassPermissions` (so the evaluator can actually run tests) — run **only in an isolated environment (container)**. In unattended environments, pin the claude binary with `CLAUDE_BIN`. Verified: 47 offline assertions + live-model (single run · forgery defense · multi-feature chain · regression-break detection · stall escalate/continue). Five rules·blockers: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
+> **Caution**: the default `--permission-mode` is `bypassPermissions` (so the evaluator can actually run tests) — run **only in an isolated environment (container)**. In unattended environments, pin the claude binary with `CLAUDE_BIN`. Verified: 47 offline assertions + live-model (single run · forgery defense · multi-feature chain · regression-break detection · stall escalate/continue) + **an unattended run to completion inside an isolated container** (2 features · cumulative regression · zero host writes). Five rules·blockers·ops lessons: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
 
 ## Verifying it works
 
@@ -128,6 +131,7 @@ scripts/                                          # hook·gate·util scripts (in
   policy.py audit.py stop_guard.py verify_gate.py session_context.py skill_nudge.py
   skill_gate.py promote.py wiki_lint.py next_feature.py scaffold.sh scaffold.ps1
   autoloop.py autoloop.sh autoloop.ps1 autoloop.bat  # (experimental) outside-session autonomous driver
+docker/Dockerfile                                 # (experimental) isolated image for the autonomous loop
 agents/evaluator.md                               # independent evaluation subagent
 skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # starter files init copies into your project
