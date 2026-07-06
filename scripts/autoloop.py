@@ -205,7 +205,11 @@ def main():
             break
         iters += 1
         desc = feat.get("description", "")
-        log(f"[{iters}] 작업: {desc}")
+        # 디스크의 완료 *주장*. 주장은 신뢰하지 않되(규율1), 구현 세션은 건너뛰고 재검증만 먼저 한다
+        # (verify-first) — 반복 실행(야간 스케줄)에서 완료분을 매번 재구현하는 낭비를 막고,
+        # 동시에 기존 기능이 안 깨졌는지 밤마다 신선 재확인하는 효과.
+        claimed = bool(feat.get("passes"))
+        log(f"[{iters}] {'재검증' if claimed else '작업'}: {desc}")
 
         if args.dry_run:
             # 구현·검증은 건너뛰고 PASS 가정하되, 회귀 명령은 실제 평가 → 실패/재시도/보류 경로 검증 가능.
@@ -213,9 +217,10 @@ def main():
             regress_ok = run_regression(args.regress, root, args.timeout)
         else:
             pd = args.plugin_dir or None
-            # 1) 구현 세션 — 인계 본문주입(규율2), --max-turns+timeout 로 제어회복(규율5)
-            run_claude(build_handoff(root, desc), root, args.max_turns,
-                       args.timeout, args.permission_mode, plugin_dir=pd)
+            if not claimed:
+                # 1) 구현 세션 — 인계 본문주입(규율2), --max-turns+timeout 로 제어회복(규율5)
+                run_claude(build_handoff(root, desc), root, args.max_turns,
+                           args.timeout, args.permission_mode, plugin_dir=pd)
             # 2) 검증 — fresh 격리 evaluator(규율3), 모델 밖(규율1)
             # evaluator 는 Read/Bash 로 테스트를 *직접 실행*해 검증한다(plan 모드면 도구 실행 불가 →
             # 검증 못 함). Write/Edit 은 evaluator 정의의 disallowedTools 가 막으므로 편집은 불가능.
@@ -234,11 +239,19 @@ def main():
             verified.add(desc)                          # 드라이버 검증 원천(규율1)
             record_pass(root, desc, evidence)           # 드라이버 단독 기록(규율1)
             set_passes(root, desc, True)                # 드라이버 단독 갱신(#C)
-            if not args.dry_run:
+            if not args.dry_run and not claimed:        # 재검증 통과는 새 작업이 없으니 커밋 불필요
                 git_commit(root, desc)
                 update_progress(root, desc)
-            log(f"    ✓ 통과·기록·커밋: {desc}")
+            log(f"    ✓ {'재검증 통과(신선 확인)' if claimed else '통과·기록·커밋'}: {desc}")
             retries.pop(desc, None)
+        elif claimed:
+            # 완료 주장이 드라이버 재검증에서 반증됨 → 주장 무효화, 다음 순회에서 재구현.
+            # (구현 시도가 아직 없었으므로 재시도 카운트는 올리지 않는다)
+            set_passes(root, desc, False)
+            log(f"    ✗ 재검증 실패 — 완료 주장 반증, 재구현 대상: {desc}")
+            if verdict == "FAIL" and not args.dry_run:
+                snippet = " ".join(evidence.split())[:300] or "(빈 출력 — 타임아웃/오류 가능)"
+                log(f"      └ evaluator: {snippet}")
         else:
             set_passes(root, desc, False)               # 모델이 조작했을 passes 를 false 로 강제(규율1)
             retries[desc] = retries.get(desc, 0) + 1

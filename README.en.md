@@ -64,7 +64,7 @@ Successful work is **not auto-generated** into skills. Instead, a 4-step path:
 
 ## Limits (non-goals)
 
-- **The plugin hooks themselves are not an unattended autonomous loop.** Hooks only enforce/verify *inside* the session. A fully autonomous loop is handled by the *outside*-the-session driver [`scripts/autoloop.py`](scripts/autoloop.py) (**experimental** — 47 offline assertions + live-model validation: single-feature run · two forgery defenses · multi-feature chain · real regression-break detection · impossible-feature escalate-and-continue). Design·rules·validation log: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
+- **The plugin hooks themselves are not an unattended autonomous loop.** Hooks only enforce/verify *inside* the session. A fully autonomous loop is handled by the *outside*-the-session driver [`scripts/autoloop.py`](scripts/autoloop.py) (**experimental** — 48 offline assertions + live-model validation: single-feature run · two forgery defenses · multi-feature chain · real regression-break detection · impossible-feature escalate-and-continue). Design·rules·validation log: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
 - **The completion gate only enforces the *existence* of a verify record.** It can't stop a workaround that skips the evaluator and forges a record.
 - **Rule *following* is not enforced.** `AGENTS.md` auto-loads, but obeying it is up to the model — only dangerous *actions* are blocked by code.
 - **Command blocking is a best-effort backstop, not a sandbox.** It catches common accidents and direct secret access, but not obfuscation, base64, or alternate-tool bypasses. The real boundary is Claude Code permissions + `settings.json` + not running untrusted code in the first place.
@@ -104,13 +104,16 @@ python3 scripts/autoloop.py --project . --dry-run               # control flow o
 
 # Isolated container operation (recommended) — build the image, mount plugin ro, inject credentials
 docker build -t omniharness-autoloop docker/
+
+# Nightly scheduled operation — colima up → credential injection → container run → logs → cleanup, in one script
+bash scripts/nightly.sh          # set OMNI_TARGET to pick the project (register with launchd/cron)
 ```
 
-> **Caution**: the default `--permission-mode` is `bypassPermissions` (so the evaluator can actually run tests) — run **only in an isolated environment (container)**. In unattended environments, pin the claude binary with `CLAUDE_BIN`. Verified: 47 offline assertions + live-model (single run · forgery defense · multi-feature chain · regression-break detection · stall escalate/continue) + **an unattended run to completion inside an isolated container** (2 features · cumulative regression · zero host writes). Five rules·blockers·ops lessons: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
+> **Caution**: the default `--permission-mode` is `bypassPermissions` (so the evaluator can actually run tests) — run **only in an isolated environment (container)**. In unattended environments, pin the claude binary with `CLAUDE_BIN`. Verified: 48 offline assertions + live-model (single run · forgery defense · multi-feature chain · regression-break detection · stall escalate/continue) + **an unattended run to completion inside an isolated container** + **nightly scheduled (launchd) operation** (completed features get a verify-first re-check instead of re-implementation). Five rules·blockers·ops lessons: [`docs/자동루프-설계.md`](docs/자동루프-설계.md).
 
 ## Verifying it works
 
-- **Offline (no API key)**: `bash tests/run.sh` — 47 assertions feeding sample input to the hook/gate scripts
+- **Offline (no API key)**: `bash tests/run.sh` — 48 assertions feeding sample input to the hook/gate scripts
   (dangerous/secret blocked + **bypass cases**·over-block regressions, completion gate block/allow, handoff + **wiki-index** injection, skill nudge·quarantine·dedup·promote, stop-guard, next_feature, scaffold preserve/force, wiki-lint positive detection, two Stop hooks together, **autonomous-loop driver** (control flow·escalate·forgery-defense)).
 - **Live integration (auth required)**: `bash tests/live.sh` — uses real `claude --plugin-dir` to verify hook *wiring* and e2e flows
   (Stop gate·`.env` block, **skill-capture e2e**, **wiki-ingest e2e**). Skips without auth. CI runs it only when the `ANTHROPIC_API_KEY` secret is set.
@@ -136,6 +139,6 @@ agents/evaluator.md                               # independent evaluation subag
 skills/{init,verify,skillify,promote,wiki-ingest,wiki-lint}/SKILL.md
 templates/                                        # starter files init copies into your project
 docs/                                             # design rationale
-tests/run.sh                                      # offline check (47 assertions)
+tests/run.sh                                      # offline check (48 assertions)
 tests/live.sh                                     # live integration smoke (auth / CI-guarded)
 ```

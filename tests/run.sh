@@ -199,7 +199,14 @@ python3 "$ROOT/scripts/autoloop.py" --project "$alp3" --dry-run --regress "false
 zfalse="$(python3 -c "import json;print(json.load(open('$alp3/feature_list.json'))[0]['passes'])")"
 { [ "$alrc3" -eq 1 ] && [ "$zfalse" = "False" ]; } \
   && ok "위조 passes:true 무시 → 검증 실패 시 false 강제·exit1" || bad "autoloop 위조방어 (rc=$alrc3 false=$zfalse)"
-rm -rf "$alp" "$alp2" "$alp3"
+
+# 신선 재검증(verify-first): 완료 주장이 재검증에서 확인되면 재구현 없이 통과 유지·exit0(야간 반복 경제성).
+alp4="$(mktemp -d)"; printf '[{"description":"W","passes":true}]' > "$alp4/feature_list.json"
+out4="$(python3 "$ROOT/scripts/autoloop.py" --project "$alp4" --dry-run --regress "true" 2>&1)"; alrc4=$?
+wtrue="$(python3 -c "import json;print(json.load(open('$alp4/feature_list.json'))[0]['passes'])")"
+{ [ "$alrc4" -eq 0 ] && [ "$wtrue" = "True" ] && printf '%s' "$out4" | grep -q "재검증"; } \
+  && ok "완료 주장 → 재검증 확인 시 통과 유지·exit0" || bad "autoloop 신선재검증 (rc=$alrc4 true=$wtrue)"
+rm -rf "$alp" "$alp2" "$alp3" "$alp4"
 
 # --- JSON 유효성 ---
 echo "== JSON 유효성 =="
